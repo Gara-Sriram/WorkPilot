@@ -1,135 +1,239 @@
-# WorkPilot — An Autonomous AI Employee for Enterprise Workflows
+# WorkPilot — Autonomous AI Employee for Enterprise Workflows
 
-> **Tagline:** *From instructions to verified outcomes.*
+<div align="center">
 
-WorkPilot is an autonomous AI employee designed for enterprise workflows. Unlike generic chatbots that merely generate conversational answers, WorkPilot takes natural-language business instructions, formulates structured execution plans, invokes sandboxed tools, handles transient failures with bounded retries, maintains persistent task state, and **independently verifies that the business outcome was achieved before marking a task completed**.
+![WorkPilot Banner](https://img.shields.io/badge/WorkPilot-Autonomous%20AI%20Employee-059669?style=for-the-badge&logo=probot&logoColor=white)
 
-The initial workflow implementation is focused on high-fidelity **Accounts Payable & Invoice Processing**, demonstrating how an enterprise AI employee bridges the gap between unstructured documents (PDF invoices) and persistent business applications (General Ledger / Accounts Payable database).
+[![Node.js](https://img.shields.io/badge/Node.js-v20%2B-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![React 19](https://img.shields.io/badge/React-v19.0-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-Atlas%20%7C%20In--Memory-47A248?style=flat-square&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
+[![Google Gemini](https://img.shields.io/badge/Google%20Gemini-Live%20SDK-4285F4?style=flat-square&logo=google&logoColor=white)](https://ai.google.dev/)
+[![Vite](https://img.shields.io/badge/Vite-v6.0-646CFF?style=flat-square&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-v3.4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Tests](https://img.shields.io/badge/Tests-20%20Passed%20%7C%20Vitest-brightgreen?style=flat-square&logo=vitest&logoColor=white)](https://vitest.dev/)
+[![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
+
+**From natural-language instructions to independently verified business outcomes.**
+
+[Key Innovations](#key-engineering-innovations) • [System Architecture](#system-architecture) • [State Machine](#task-lifecycle-state-machine) • [Interactive Scenarios](#interactive-demonstration-scenarios) • [Quickstart](#getting-started) • [Security](#security--governance)
+
+</div>
 
 ---
 
-## Architecture Overview
+## Executive Summary
+
+Most generative AI projects are conversational chatbots: a user sends a prompt, and the model returns unstructured prose. If the model hallucinates or fails, the user is left to detect and correct the discrepancy manually.
+
+**WorkPilot** is fundamentally different. It is an **Autonomous AI Employee** engineered for mission-critical enterprise workflows. Given a natural-language directive, WorkPilot:
+1. **Formulates an actionable plan** with discrete, typed tool calls.
+2. **Executes against real business backends** (extracting raw PDF invoices, validating schemas, persisting to General Ledger databases).
+3. **Enforces human policy governance** whenever financial thresholds ($10,000+) are exceeded.
+4. **Handles transient failures and bounded retries** without getting stuck in infinite loops.
+5. **Independently verifies the outcome** by comparing persisted database records against raw source documents before permitting the task to complete.
+
+The current implementation targets **Accounts Payable & Document Intelligence**, bridging unstructured business documents (PDF invoices) and transactional accounting systems (MongoDB General Ledger) with zero-tolerance for hallucination.
+
+---
+
+## Key Engineering Innovations
+
+### 1. Independent Ground-Truth Verification
+*The Problem:* In standard AI agents, a tool returning `success: true` or a database write acknowledgement is accepted as mission completion. This allows subtle hallucinations (e.g. altered invoice numbers or minor rounding errors) to enter enterprise ledgers undetected.
+
+*The Solution:* WorkPilot mandates an **Independent Outcome Verification Phase**. After creating a finance record, the agent triggers an isolated verification engine that audits the database document directly against raw PDF source text across **5 discrete assertion dimensions**:
+- **Vendor Identity Match:** Exact string matching against parsed vendor metadata.
+- **Invoice Number Match:** Strict alphanumeric identifier alignment.
+- **Exact Cents Value:** Exact minor unit match (`amountCents`) eliminating floating-point rounding errors.
+- **Currency Code:** ISO currency format compliance (e.g., `USD`).
+- **Due Date Match:** ISO 8601 calendar date parity.
+
+A task **cannot** transition to `COMPLETED` unless all 5 verification assertions pass with 100% fidelity.
+
+---
+
+### 2. Controlled Execution Loop & Budgeting
+*The Problem:* Unbounded multi-agent loops frequently suffer from conversational deadlocks, non-deterministic latency spikes, and runaway token consumption.
+
+*The Solution:* WorkPilot utilizes a **single-agent controlled execution loop** with strict deterministic operational boundaries:
+- **Maximum Execution Budget:** Capped at 10 tool calls per task.
+- **Global Timeout Guard:** Enforced 120-second hard timeout.
+- **Transient Failure Retries:** Step-level exponential backoff capped at 3 attempts for network errors.
+- **Dynamic Context Propagation:** Parameter outputs from prior steps (such as extracted document IDs) are automatically resolved and injected into downstream tool arguments.
+
+---
+
+### 3. Human-in-the-Loop Financial Governance
+*The Problem:* Fully autonomous financial execution poses significant compliance and regulatory risks if high-value transactions execute without human sign-off.
+
+*The Solution:* WorkPilot enforces hard policy thresholds at the runtime level. Any operation involving transactions **$\ge \$10,000$** triggers an automatic governance lock:
+- The execution loop halts immediately, transitioning task state to `WAITING_FOR_APPROVAL`.
+- An immutable `ApprovalRequest` record is persisted with transaction justification.
+- The UI triggers an interactive governance modal requiring an authenticated officer's decision and commentary.
+- Rejection terminates execution safely; approval resumes the workflow and commits the transaction to the ledger.
+
+---
+
+### 4. Database-Enforced Idempotency & Financial Precision
+- **Unique Composite Key:** Prevents duplicate payments and re-submission errors via a database-level unique compound index: `vendorNormalized__invoiceNumberNormalized`. Re-processing an invoice trips MongoDB code 11000 and is handled cleanly as a business rule failure.
+- **Integer Minor Units:** All monetary values are calculated and stored in integer cents (`amountCents`) alongside standard floats, preventing IEEE-754 floating-point inaccuracies during ledger calculations.
+
+---
+
+### 5. Resilient Dual-Engine AI Architecture
+- **Official `@google/genai` Integration:** Connects directly to Google's next-generation Gemini SDK (`gemini-flash-latest`) for live intent interpretation and plan synthesis.
+- **Cloud Latency Guardrails:** Incorporates a 7-second timeout wrapper around cloud model requests.
+- **Deterministic Fallback Engine:** If cloud APIs experience quota exhaustion (HTTP 429), spikes in demand (HTTP 503), or network latency, WorkPilot automatically fails over to an internal deterministic planning engine without hanging or breaking the user experience.
+
+---
+
+## System Architecture
 
 ```mermaid
 flowchart TD
-    User([Enterprise User / Operator]) -->|Natural Language Instruction| UI[React 19 + Vite Dashboard]
-    UI -->|REST API / JSON| Express[Node.js + Express REST API]
+    User([Enterprise Operator]) -->|Natural Language Directive| UI[React 19 + Vite Dashboard]
+    UI -->|REST API / JSON| Express[Node.js + Express API Gateway]
     
-    subgraph Core Agent Runtime
-        Express --> Runtime[Agent Execution Controller]
-        Runtime --> Interpreter[Task Understanding & Intent Parser]
+    subgraph Agent Runtime Controller
+        Express --> Runtime[Autonomous Execution Runtime]
+        Runtime --> Interpreter[Intent & Entity Parser]
         Runtime --> Planner[Structured Plan Generator]
         
-        Interpreter -.->|Structured Prompt| Gemini[Google Gemini 2.5 Flash / Test Fixture]
-        Planner -.->|Function / Plan Schema| Gemini
+        Interpreter -.->|Prompt & Schema| LLM[Google Gemini / Fallback Engine]
+        Planner -.->|Tool Definitions| LLM
         
         Runtime --> Loop{Controlled Execution Loop}
-        Loop -->|1. Validate Schema| Registry[Modular Tool Registry & Zod Validators]
-        Loop -->|2. Check Policy Threshold| Governance[Human Approval Engine]
-        Loop -->|3. Execute Action| Tools[Tool Set]
+        Loop -->|Validate Arguments| Registry[Modular Tool Registry & Zod Schema]
+        Loop -->|Check Policy Threshold| Governance{Amount >= $10,000?}
         
-        Governance -.->|Amount > $10,000| ApprovalLock[Pause Task State & Request Sign-off]
-        ApprovalLock --> User
+        Governance -->|Yes| ApprovalLock[Pause Task State & Emit Approval Event]
+        ApprovalLock --> UI
+        
+        Governance -->|No| ExecTool[Execute Sandboxed Tool]
     end
 
-    subgraph Tool Allowlist
-        Tools --> ToolSearch[search_documents]
-        Tools --> ToolExtract[extract_invoice]
-        Tools --> ToolValidate[validate_invoice]
-        Tools --> ToolCreate[create_finance_record]
-        Tools --> ToolGet[get_finance_record]
-        Tools --> ToolVerify[verify_finance_record]
-        Tools --> ToolApproval[request_human_approval]
+    subgraph Sandboxed Tool Allowlist
+        ExecTool --> T1[search_documents]
+        ExecTool --> T2[extract_invoice]
+        ExecTool --> T3[validate_invoice]
+        ExecTool --> T4[create_finance_record]
+        ExecTool --> T5[get_finance_record]
+        ExecTool --> T6[verify_finance_record]
+        ExecTool --> T7[request_human_approval]
     end
 
-    subgraph Document & Storage Layer
-        ToolSearch & ToolExtract --> Unpdf[PDF Text Extractor Engine]
-        Unpdf --> Storage[(PDF Document Store)]
+    subgraph Storage & Ledger
+        T1 & T2 --> Unpdf[PDF.js Extraction Engine]
+        Unpdf --> DocStore[(Document Repository)]
+        
+        T4 & T5 --> MongoDB[(MongoDB Atlas / In-Memory)]
+        MongoDB --> UniqueIndex[Compound Unique Index: vendor + invoice]
     end
 
-    subgraph Persistence & Ledger
-        ToolCreate & ToolGet --> MongoDB[(MongoDB Atlas / Memory Server)]
-        MongoDB --> UniqueIndex[Unique Composite Key: vendor_normalized__inv_normalized]
-    end
-
-    subgraph Outcome Verification Phase
-        ToolVerify --> Verifier[Independent Outcome Verifier]
-        Verifier -->|Read Source Data| Storage
+    subgraph Outcome Verification Engine
+        T6 --> Verifier[Independent 5-Point Verifier]
+        Verifier -->|Read Ground Truth| DocStore
         Verifier -->|Read Persisted Record| MongoDB
-        Verifier -->|Assert 5 Check Dimensions| AssertionReport{All Checks Match?}
-        AssertionReport -->|Yes: 100% Match| SucceededState[Task COMPLETED]
-        AssertionReport -->|No: Discrepancy| FailedState[Task FAILED with Discrepancy Audit]
+        Verifier --> Assertions{5 Checks Valid?}
+        Assertions -->|100% Match| TaskDone[Status: COMPLETED]
+        Assertions -->|Discrepancy Found| TaskFail[Status: FAILED with Audit Diff]
     end
 ```
 
 ---
 
-## Key Features
+## Task Lifecycle State Machine
 
-1. **Autonomous Task Planning & Tool Execution:**
-   - Translates natural-language business requests into an ordered sequence of executable steps.
-   - Constrained by a strict execution budget: default maximum of 10 tool calls per task and global timeout protection to prevent infinite loops.
+WorkPilot tracks every workflow through an explicit, persistent state machine stored in MongoDB:
 
-2. **Real PDF Document Processing:**
-   - Real PDF parsing using modern PDF.js (`unpdf`) with magic header validation and file-size guardrails (10 MB limit).
-   - Never fabricates invoice content or claims to read a document when extraction fails.
-
-3. **Modular Tool Registry with Zod Validation:**
-   - Sandboxed tool allowlist: `search_documents`, `extract_invoice`, `validate_invoice`, `create_finance_record`, `get_finance_record`, `verify_finance_record`, and `request_human_approval`.
-   - Every tool call requires strict Zod schema validation before execution is permitted. Arbitrary code execution and shell commands are strictly prohibited.
-
-4. **Independent Outcome Verification:**
-   - A database write acknowledgement alone is **never** accepted as proof of success.
-   - The verification engine independently compares the persisted record against the original source document across 5 dimensions: **Vendor Identity**, **Invoice Number**, **Exact Cents Monetary Value**, **Currency Code**, and **Due Date**.
-   - Tasks cannot transition to `COMPLETED` unless verification passes with 100% fidelity.
-
-5. **Human-in-the-Loop Governance:**
-   - Any financial action exceeding the enterprise policy threshold ($10,000) automatically pauses execution and persists a pending approval request.
-   - The LLM cannot bypass governance controls; execution resumes only when an authorized operator records an `APPROVED` decision with audit notes.
-
-6. **Database-Enforced Duplicate Prevention:**
-   - Protects against duplicate financial records using a database-level unique composite index (`vendorNormalized__invoiceNumberNormalized`).
-   - Re-running the same task or re-submitting an invoice safely trips MongoDB duplicate-key constraints (code 11000) and halts with a domain error instead of corrupting the ledger.
-
-7. **Exact Cents Monetary Math:**
-   - Stored using integer minor currency units (`amountCents`) alongside float amounts to eliminate IEEE-754 floating-point rounding errors during financial verification.
-
-8. **Crash & Restart Recovery:**
-   - Tasks stuck in `RUNNING` or `VERIFYING` across server restarts are safely detected and marked `FAILED` with recovery audit logs, preventing blind replays of non-idempotent operations.
-
-9. **Live AI or High-Fidelity Test Fixture Mode:**
-   - Seamlessly uses the official `@google/genai` SDK when `GEMINI_API_KEY` is configured.
-   - Transparently falls back to a deterministic test engine when no API key is provided, clearly indicating demo mode in the UI without faking results.
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING: User submits natural-language instruction
+    PENDING --> RUNNING: Agent parses intent & creates structured plan
+    
+    state RUNNING {
+        [*] --> ExecutingStep
+        ExecutingStep --> StepSucceeded: Tool execution valid
+        ExecutingStep --> Retrying: Transient error (attempts < 3)
+        Retrying --> ExecutingStep
+        ExecutingStep --> StepFailed: Unrecoverable tool error
+    }
+    
+    RUNNING --> WAITING_FOR_APPROVAL: Operation exceeds policy threshold ($10,000+)
+    WAITING_FOR_APPROVAL --> RUNNING: Officer approves transaction
+    WAITING_FOR_APPROVAL --> FAILED: Officer rejects transaction
+    
+    RUNNING --> VERIFYING: All functional plan steps complete
+    
+    state VERIFYING {
+        [*] --> AuditLedgerAgainstSource
+        AuditLedgerAgainstSource --> AssertionsPassed: 5/5 checks match exactly
+        AuditLedgerAgainstSource --> AssertionsFailed: Discrepancy detected
+    }
+    
+    VERIFYING --> COMPLETED: Independent verification succeeded
+    VERIFYING --> FAILED: Verification discrepancy identified
+    RUNNING --> FAILED: Execution budget exceeded or fatal error
+    RUNNING --> CANCELLED: Operator cancelled task
+    
+    COMPLETED --> [*]
+    FAILED --> [*]
+    CANCELLED --> [*]
+```
 
 ---
 
 ## Technology Stack
 
-| Component | Technology | Rationale |
+| Layer | Technologies | Engineering Rationale |
 | :--- | :--- | :--- |
-| **Frontend Framework** | React 19, Vite | Fast, modern component model with instant HMR |
-| **Styling** | Tailwind CSS | Clean Linear/Vercel enterprise SaaS design system |
-| **Icons** | Lucide React | Modern, accessible SVG icon library |
-| **Backend Framework** | Node.js (v24), Express.js | Modular, asynchronous event-driven REST API |
-| **Database & ODM** | MongoDB Atlas / Mongoose | Flexible document model with schema indexing and constraints |
-| **In-Memory Fallback** | `mongodb-memory-server` | Zero-configuration local startup and automated testing |
-| **AI SDK** | `@google/genai` (official) | Current Google Gen AI SDK with structured outputs |
-| **Schema Validation** | Zod (v3) | Runtime argument and environment variable validation |
-| **PDF Extraction** | `unpdf` (PDF.js) | Standards-compliant PDF parsing without native binary deps |
-| **File Uploads** | Multer | Memory-buffered safe uploads with size and mime checking |
-| **Test Runner** | Vitest, Supertest | Fast unit and integration tests with deterministic fixtures |
+| **Frontend UI** | **React 19**, **Vite**, **Tailwind CSS** | Instant hot-module replacement, modern component hierarchy, and zero-dependency production bundle |
+| **Icons & UI Feedback** | **Lucide React** | Accessible, consistent SVG iconography across all system views |
+| **Error Resiliency** | **Custom React ErrorBoundary** | Catches rendering exceptions and renders isolated diagnostic telemetry without unmounting the application |
+| **Backend API** | **Node.js (v20+)**, **Express.js** | Non-blocking, asynchronous event loop optimized for I/O-intensive document extraction and tool orchestration |
+| **Database & ODM** | **MongoDB Atlas**, **Mongoose** | Rich document model, schema-level composite indexing, and transactional write atomicity |
+| **Zero-Config DB Fallback** | **`mongodb-memory-server`** | Automatically initializes an in-memory database if no external MongoDB URI is provided |
+| **AI SDK** | **`@google/genai` (Official SDK)** | Direct integration with Google Gemini Flash models with structured prompt contracts |
+| **Runtime Validation** | **Zod (v3)** | Enforces strict schema contracts on all incoming API requests and tool invocation parameters |
+| **PDF Extraction Engine** | **`unpdf` (PDF.js)** | Standards-compliant PDF parsing with magic header validation and zero native binary dependencies |
+| **Automated Testing** | **Vitest**, **Supertest** | High-speed unit and integration test runner executing 20 automated tests in < 3 seconds |
 
 ---
 
-## Why a Single Agent Instead of Multi-Agent?
+## Interactive Demonstration Scenarios
 
-In real-world enterprise automation, introducing multiple conversational agents that chat with one another often leads to non-deterministic failure modes, unconstrained token loops, latency spikes, and obscure debugging traces.
+WorkPilot includes 3 pre-seeded business scenarios accessible directly from the **Overview** dashboard:
 
-WorkPilot adopts a **single-agent controlled execution loop**:
-- **What the LLM Controls:** High-level intent comprehension, initial structured planning, dynamic parameter extraction, and step re-planning upon observing errors.
-- **What the Application Controls:** Tool validation, execution budgeting, permission checks, database transaction boundaries, duplicate prevention, and independent outcome verification.
+### Scenario 1: The Happy Path (Autonomous Discovery & Independent Verification)
+- **Prompt:** `"Find the latest Acme Technologies invoice, extract its details, create a finance record, and verify it."`
+- **Execution Flow:**
+  1. `search_documents`: Locates `Acme_Technologies_Invoice_INV-2024-001.pdf`.
+  2. `extract_invoice`: Extracts vendor name, invoice number (`INV-2024-001`), amount (`USD 2450.00`), invoice date (`2024-10-15`), and due date (`2024-11-15`).
+  3. `validate_invoice`: Validates positive currency amounts and date formats via Zod.
+  4. `create_finance_record`: Persists the record to MongoDB with exact integer cents (`245000`).
+  5. `verify_finance_record`: Compares the persisted database record against raw PDF text. Passes all 5 verification assertions.
+- **Outcome:** Status transitions to **COMPLETED** only after independent verification passes.
 
-This architecture delivers maximum auditability, deterministic boundaries, and reliable enterprise compliance.
+### Scenario 2: Human-in-the-Loop Governance ($14,800 Policy Lock)
+- **Prompt:** `"Find the Globex Logistics invoice GLX-9942, extract details, create finance record, and verify."`
+- **Execution Flow:**
+  1. The agent discovers the document and extracts an amount of **$14,800.00**.
+  2. Runtime detects that the amount exceeds the corporate policy limit of **$10,000.00**.
+  3. Task execution automatically pauses; status transitions to `WAITING_FOR_APPROVAL`.
+  4. The operator navigates to the **Approvals** view, inspects the transaction justification, inputs commentary, and authorizes the action.
+  5. The execution loop resumes, commits the record, and completes the verification phase.
+
+### Scenario 3: Graceful Failure & Zero-Fabrication Guarantee
+- **Prompt:** `"Find and verify invoice for QuantumLeap Innovations Corp."`
+- **Execution Flow:**
+  1. `search_documents` executes and returns 0 matching documents in the repository.
+  2. The agent recognizes the missing precondition and halts execution immediately with status `FAILED`.
+  3. **Zero Fabrication:** The system never invents fake invoice numbers, amounts, or vendor details to force completion.
+
+### Scenario 4: Database Duplicate Prevention
+- Re-submitting the Acme Technologies workflow causes the database insert step to encounter the compound unique index `vendorNormalized__invoiceNumberNormalized`.
+- MongoDB rejects the write with error code 11000.
+- WorkPilot catches the duplicate violation, logs the incident, and terminates execution safely without corrupting ledger integrity.
 
 ---
 
@@ -137,89 +241,55 @@ This architecture delivers maximum auditability, deterministic boundaries, and r
 
 ```
 WorkPilot/
-├── package.json                   # Root orchestrator scripts (dev, test, build)
-├── .gitignore                     # Git ignore rules (node_modules, .env, uploads)
+├── package.json                         # Monorepo orchestration scripts
+├── .gitignore                           # Strict exclusion for .env and artifacts
+├── README.md                            # Comprehensive system documentation
 ├── scripts/
-│   └── dev.js                     # Cross-platform concurrent dev server runner
+│   └── dev.js                           # Cross-platform concurrent runner
 ├── server/
-│   ├── package.json               # Backend dependencies and test scripts
-│   ├── .env.example               # Configuration template
-│   ├── .env                       # Local environment file
-│   ├── vitest.config.js           # Vitest test configuration
-│   ├── src/
-│   │   ├── index.js               # Server entrypoint and graceful shutdown
-│   │   ├── app.js                 # Express app, CORS, routes, error handling
-│   │   ├── config/
-│   │   │   ├── env.js             # Zod environment validation
-│   │   │   └── db.js              # MongoDB Atlas + MongoMemoryServer fallback
-│   │   ├── models/
-│   │   │   ├── Task.js            # Task execution state and event timeline
-│   │   │   ├── Document.js        # PDF metadata and extracted text
-│   │   │   ├── FinanceRecord.js   # Ledger records with unique composite index
-│   │   │   └── ApprovalRequest.js # Human-in-the-loop governance requests
-│   │   ├── agent/
-│   │   │   ├── runtime.js         # Controlled execution loop & budget limits
-│   │   │   └── geminiClient.js    # Gemini SDK integration & fallback engine
-│   │   ├── tools/
-│   │   │   ├── registry.js        # Tool registry and argument validation
-│   │   │   └── index.js           # The 7 core enterprise tools
-│   │   ├── services/
-│   │   │   ├── documentService.js # Document upload and search engine
-│   │   │   ├── pdfService.js      # Robust PDF text extraction
-│   │   │   ├── financeService.js  # Ledger operations and duplicate handling
-│   │   │   ├── taskService.js     # Task lifecycle and restart recovery
-│   │   │   ├── approvalService.js # Governance approval workflows
-│   │   │   ├── verificationService.js # Independent 5-check outcome verifier
-│   │   │   └── demoSeeder.js      # Sample invoice seeding
-│   │   ├── fixtures/
-│   │   │   └── generatePdfFixtures.js # Programmatic real PDF generator
-│   │   ├── middleware/
-│   │   │   ├── errorHandler.js    # Centralized HTTP error handling
-│   │   │   ├── upload.js          # Multer 10MB PDF upload middleware
-│   │   │   └── rateLimiter.js     # In-memory IP rate limiter
-│   │   └── routes/
-│   │       ├── healthRoutes.js    # /api/health diagnostics
-│   │       ├── taskRoutes.js      # /api/tasks REST endpoints
-│   │       ├── documentRoutes.js  # /api/documents REST endpoints
-│   │       ├── financeRoutes.js   # /api/finance-records REST endpoints
-│   │       ├── approvalRoutes.js  # /api/approvals REST endpoints
-│   │       └── demoRoutes.js      # /api/demo seed and status endpoints
-│   └── tests/
-│       ├── setup.js               # Test suite setup and in-memory DB init
-│       ├── health.test.js         # System health tests
-│       ├── tools.test.js          # Tool validation and registry tests
-│       ├── finance.test.js        # Ledger duplicate prevention tests
-│       ├── verification.test.js   # Independent verification tests
-│       ├── approvals.test.js      # Human governance threshold tests
-│       └── workflow.test.js       # End-to-end autonomous workflow tests
+│   ├── package.json                     # Server dependencies and Vitest scripts
+│   ├── .env.example                     # Documented configuration template
+│   ├── vitest.config.js                 # Vitest test suite configuration
+│   ├── fixtures/                        # Sample PDFs (Acme, Globex, Initech)
+│   └── src/
+│       ├── index.js                     # HTTP server startup & graceful shutdown
+│       ├── app.js                       # Express configuration & middleware
+│       ├── agent/
+│       │   ├── runtime.js               # Controlled execution loop & budgeting
+│       │   └── geminiClient.js          # Google Gemini SDK & fallback engine
+│       ├── config/
+│       │   ├── env.js                   # Zod environment variable validation
+│       │   └── db.js                    # MongoDB Atlas + MongoMemoryServer
+│       ├── middleware/
+│       │   ├── errorHandler.js          # Centralized error formatting
+│       │   ├── rateLimiter.js           # In-memory IP rate limiter
+│       │   └── upload.js                # Multer PDF upload configuration
+│       ├── models/
+│       │   ├── Task.js                  # Task execution state machine
+│       │   ├── Document.js              # PDF metadata and text index
+│       │   ├── FinanceRecord.js         # Ledger records with compound unique key
+│       │   └── ApprovalRequest.js       # Human governance records
+│       ├── routes/                      # REST endpoints (/tasks, /documents, etc.)
+│       ├── services/                    # Business logic (finance, PDF, verification)
+│       └── tools/
+│           ├── registry.js              # Tool registration & Zod argument checks
+│           └── index.js                 # The 7 core sandboxed enterprise tools
 └── client/
-    ├── package.json               # Frontend dependencies
-    ├── vite.config.js             # Vite proxy and dev configuration
-    ├── tailwind.config.js         # Enterprise SaaS design system palette
-    ├── index.html                 # App shell with Inter and JetBrains Mono fonts
+    ├── package.json                     # Frontend dependencies
+    ├── vite.config.js                   # Vite configuration & backend proxy
+    ├── tailwind.config.js               # Enterprise design system tokens
+    ├── index.html                       # Shell with Inter & JetBrains Mono fonts
     └── src/
-        ├── main.jsx               # React DOM root
-        ├── App.jsx                # Layout, tab management, and auto-polling
-        ├── index.css              # Tailwind base styles and custom scrollbars
-        ├── api/
-        │   └── client.js          # REST API client
+        ├── main.jsx                     # React root
+        ├── App.jsx                      # App shell, tab router, auto-polling
+        ├── api/client.js                # Type-safe fetch client for REST API
         └── components/
-            ├── layout/
-            │   ├── Sidebar.jsx    # Navigation, AI mode, and demo reset
-            │   └── Header.jsx     # Header with status pills and New Task CTA
-            ├── dashboard/
-            │   └── OverviewView.jsx # Metric cards, presets, and summaries
-            ├── tasks/
-            │   └── TasksView.jsx  # Interactive runner, timeline, and verifier
-            ├── documents/
-            │   └── DocumentsView.jsx # Upload zone and text inspector
-            ├── finance/
-            │   └── FinanceView.jsx# Ledger table and composite key inspector
-            ├── approvals/
-            │   └── ApprovalsView.jsx # Human-in-the-loop authorization cards
-            └── common/
-                ├── Badge.jsx      # Color-coded enterprise status badge
-                └── Modal.jsx      # Accessible modal dialog
+            ├── common/                  # ErrorBoundary, Badge, Modal dialogs
+            ├── dashboard/               # OverviewView: metrics & preset scenarios
+            ├── tasks/                   # TasksView: execution runner & audit log
+            ├── documents/               # DocumentsView: PDF upload & text inspector
+            ├── finance/                 # FinanceView: General ledger & record inspector
+            └── approvals/               # ApprovalsView: Human governance review cards
 ```
 
 ---
@@ -227,170 +297,102 @@ WorkPilot/
 ## Getting Started
 
 ### Prerequisites
-- **Node.js**: v18.0.0 or later (tested on v24.19.0)
+- **Node.js**: v18.0.0 or later (tested on v20.x and v24.x)
 - **NPM**: v9.0.0 or later
-- **MongoDB** *(Optional)*: Local MongoDB or MongoDB Atlas URI. **If omitted, WorkPilot automatically initializes an in-memory MongoDB database so you can test immediately with zero external setup!**
-- **Gemini API Key** *(Optional)*: If omitted, WorkPilot runs in deterministic demo fixture mode with visible UI indicators.
+- **MongoDB** *(Optional)*: Local MongoDB instance or MongoDB Atlas connection string. If omitted, WorkPilot automatically launches an in-memory database for immediate testing.
+- **Google Gemini API Key** *(Optional)*: If omitted, WorkPilot runs in high-fidelity deterministic fallback mode.
 
 ---
 
-### Installation
+### 1. Installation
 
-Clone the repository and install all dependencies for both backend and frontend:
+Clone the repository and install all dependencies:
 
 ```bash
-# From the root directory:
+git clone https://github.com/Gara-Sriram/WorkPilot.git
+cd WorkPilot
 npm run install:all
 ```
 
-Alternatively, install manually in each subfolder:
-```bash
-cd server && npm install
-cd ../client && npm install
-cd ..
-```
-
 ---
 
-### Environment Configuration
+### 2. Environment Configuration
 
-The application includes a documented `server/.env.example` file. Copy it to `server/.env`:
+Copy the sample environment file to create your local backend `.env`:
 
 ```bash
 cp server/.env.example server/.env
 ```
 
-Configuration variables:
+Configuration variables in `server/.env`:
 
 ```env
 PORT=5000
 NODE_ENV=development
 CLIENT_ORIGIN=http://localhost:5173
 
-# MongoDB Connection String:
-# Leave blank to use zero-config in-memory MongoDB:
+# Optional: MongoDB connection URI (leaves blank to use automated in-memory DB)
 MONGODB_URI=
 
-# Official Google Gemini API Key (https://aistudio.google.com/):
-# Leave blank to run in deterministic demo fixture mode:
+# Optional: Google Gemini API key from https://aistudio.google.com/
 GEMINI_API_KEY=
 
-# Supported Gemini Model:
-GEMINI_MODEL=gemini-2.5-flash
+# Supported Gemini Model
+GEMINI_MODEL=gemini-flash-latest
 
-# Autonomous execution parameters:
+# Operational limits
 MAX_TOOL_CALLS=10
 MAX_RETRIES=3
 TASK_TIMEOUT_MS=120000
 
-# Enterprise Approval threshold (amounts above $10,000 require sign-off):
+# Enterprise policy threshold (amounts above this require human approval)
 APPROVAL_THRESHOLD_AMOUNT=10000
 ```
 
 ---
 
-### Running the Application
+### 3. Launching Development Environment
 
-You can launch both the backend server and frontend development client with a single command from the project root:
+Start both the backend server and frontend client concurrently with a single command:
 
 ```bash
 npm run dev
 ```
 
-- **Frontend Client:** [http://localhost:5173](http://localhost:5173)
+- **Frontend Application:** [http://localhost:5173](http://localhost:5173)
 - **Backend API:** [http://localhost:5000](http://localhost:5000)
-- **Health Diagnostics:** [http://localhost:5000/api/health](http://localhost:5000/api/health)
+- **Health & Diagnostic Telemetry:** [http://localhost:5000/api/health](http://localhost:5000/api/health)
 
 ---
 
-### Running the Automated Tests
+### 4. Running Automated Tests
 
-WorkPilot includes a test suite covering the health endpoint, tool argument validation, duplicate finance prevention, independent outcome verification, human approval governance, and end-to-end autonomous workflows:
+WorkPilot includes a comprehensive Vitest test suite validating all tool contracts, verification rules, duplicate prevention, and governance locks:
 
 ```bash
 npm test
 ```
 
-Or from the `server/` directory:
-```bash
-cd server
-npm test
-```
-
-All 6 test suites and 20 tests execute against an isolated in-memory test database:
-- `tests/health.test.js`: System health and transparency diagnostics
-- `tests/tools.test.js`: Unknown tool rejection and argument validation
-- `tests/finance.test.js`: Duplicate key prevention and exact cents math
-- `tests/verification.test.js`: 5-point independent verification assertions
-- `tests/approvals.test.js`: Policy threshold detection and rejection handling
-- `tests/workflow.test.js`: Complete autonomous execution loop to verified completion
+All **6 test suites and 20 tests** execute in isolation against an automated in-memory MongoDB instance:
+- `tests/health.test.js` — System health and diagnostic transparency
+- `tests/tools.test.js` — Tool registry validation and Zod argument enforcement
+- `tests/finance.test.js` — Compound unique key duplicate prevention & integer cents math
+- `tests/verification.test.js` — 5-point independent ground-truth verification assertions
+- `tests/approvals.test.js` — Policy threshold lock detection and rejection workflows
+- `tests/workflow.test.js` — End-to-end autonomous execution loop to verified completion
 
 ---
 
-## Step-by-Step Demonstration Script
+## Security & Governance
 
-### Scenario 1: The Happy Path (Autonomous Discovery, Extraction, Persistence & Verification)
-1. Open the dashboard at [http://localhost:5173](http://localhost:5173).
-2. On the **Overview** page or **Tasks** page, click the quick preset:
-   > *"Find the latest Acme Technologies invoice, extract its details, create a finance record, and verify it."*
-3. Click **Run Task**.
-4. Observe the live execution:
-   - **Step 1 (`search_documents`):** Locates `Acme_Technologies_Invoice_INV-2024-001.pdf`.
-   - **Step 2 (`extract_invoice`):** Extracts vendor name, invoice number (`INV-2024-001`), amount (`USD 2450.00`), invoice date (`2024-10-15`), and due date (`2024-11-15`).
-   - **Step 3 (`validate_invoice`):** Verifies data types, positive amount, and date formats.
-   - **Step 4 (`create_finance_record`):** Persists the record to MongoDB with exact integer cents (`245000`).
-   - **Step 5 (`verify_finance_record`):** Reads the newly created database record, compares it against the raw source invoice, and passes all 5 verification assertions.
-5. The task status transitions to **COMPLETED** only after independent verification passes.
-6. Navigate to the **Finance Records** tab to inspect the verified record.
-
-### Scenario 2: Human-in-the-Loop Governance ($14,800 High-Value Policy Threshold)
-1. In the **Tasks** page, run:
-   > *"Find the Globex Logistics invoice GLX-9942, extract details, create finance record, and verify."*
-2. Observe execution pause at Step 4:
-   - The invoice amount is **$14,800.00**, exceeding the corporate threshold of **$10,000.00**.
-   - The agent sets task status to `WAITING_FOR_APPROVAL` and emits an audit event.
-3. In the sidebar or top banner, notice the alert: `1 Action Requires Human Approval`.
-4. Click into the **Approvals** tab.
-5. Click **Authorize Action**, input your officer name and audit comments, and confirm.
-6. The agent loop automatically resumes and completes the task.
-7. Alternatively, test **Reject** to see the task safely halted and marked as `FAILED`.
-
-### Scenario 3: Failure Handling & Zero-Fabrication Guarantee
-1. In the **Tasks** page, enter:
-   > *"Find and verify invoice for QuantumLeap Innovations Corp."*
-2. Observe that the agent executes `search_documents`, finds 0 matches in the repository, and halts execution safely with status `FAILED`.
-3. Notice that the agent **does not invent a fake invoice** or claim success when no matching document exists.
-
-### Scenario 4: Database Duplicate Prevention
-1. Re-run the Acme Technologies prompt from Scenario 1.
-2. The agent attempts to insert another record with composite key `acmetechnologiesinc__inv2024001`.
-3. The database uniqueness constraint rejects the insert with duplicate-key code 11000.
-4. The system catches the error, halts execution, and prevents duplicate financial records.
+1. **Backend Secret Isolation:** API keys and database credentials reside strictly on the server process. The client bundle never receives sensitive credentials.
+2. **Untrusted Data Isolation:** PDF invoice text is treated strictly as data payloads and never as system prompt instructions, mitigating indirect prompt injection risks.
+3. **Strict Tool Sandboxing:** Only explicitly registered tools with predefined Zod schemas can be invoked. Arbitrary shell execution and unconstrained database queries are prohibited.
+4. **File Upload Guardrails:** Uploads are restricted to 10 MB, constrained to `application/pdf`, and validated for `%PDF-` magic header signatures before parsing.
+5. **Rate Limiting & CORS:** The API gateway enforces IP rate limiting and restricts CORS origins to the configured client URL.
 
 ---
 
-## Security Considerations
+## License
 
-1. **Backend Secret Isolation:** `GEMINI_API_KEY` and `MONGODB_URI` reside solely on the backend process. Vite never exposes credentials to the client bundle.
-2. **Untrusted Invoice Content Defenses:** PDF text is treated strictly as data payloads, never as system instructions. Indirect prompt injection attacks (such as embedded text instructing the model to ignore rules or transfer funds) cannot alter backend tool permissions or policy thresholds.
-3. **Strict Tool Allowlist & Sandboxing:** Only explicitly registered tools with Zod schemas can be executed. Shell commands, arbitrary file system traversal, and unconstrained DB queries are prohibited.
-4. **Input Sanitization & Upload Guardrails:** Uploads are limited to 10 MB and validated for `%PDF-` magic header bytes before processing.
-5. **Rate Limiting & CORS:** The API applies in-memory rate limiting and restricts CORS origins to the configured client URL.
-
----
-
-## Known Limitations & Trade-Offs
-
-- **Single-User Demo Prototype:** Authentication is simplified to a single operator persona. In a multi-tenant production environment, role-based access control (RBAC) with JWT or OAuth2 would be layered onto the approval and task services.
-- **Local PDF Storage:** Uploaded PDFs are stored in `server/uploads/` on the local disk. In a cloud deployment, this layer would plug into S3 or Google Cloud Storage.
-- **Synchronous Execution Loop:** For this prototype, tasks run in an asynchronous in-process loop with MongoDB persistence. For high-volume multi-thousand concurrent enterprise queues, an external task orchestrator (such as Temporal or BullMQ) would manage worker distribution.
-
----
-
-## Resume-Ready Project Descriptions
-
-Use these bullet points to highlight the engineering achievements demonstrated by WorkPilot:
-
-- **Autonomous Agent Runtime & Planning:** Built an autonomous AI employee in Node.js/Express and React that interprets natural-language business requests, generates structured execution plans via Google Gemini, and autonomously invokes sandboxed tools with Zod argument validation and bounded retries.
-- **Persistent Workflow State & Failure Recovery:** Designed a persistent task state machine in MongoDB handling restart recovery, rate limiting, and human-in-the-loop governance locks for financial operations exceeding enterprise policy thresholds ($10,000+).
-- **Idempotent Ledger & Independent Outcome Verification:** Engineered a reliable accounts payable pipeline featuring database-level unique composite keys to prevent duplicate records, exact-integer minor unit monetary calculations, and an independent 5-point verification engine that audits persisted records against raw PDF text before permitting task completion.
+This project is licensed under the [MIT License](LICENSE).
