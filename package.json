@@ -1,0 +1,16 @@
+{
+  "name": "workpilot-root",
+  "version": "1.0.0",
+  "description": "WorkPilot — An Autonomous AI Employee for Enterprise Workflows",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install && npm install --prefix server && npm install --prefix client",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "dev": "node scripts/dev.js",
+    "start": "npm start --prefix server",
+    "build": "npm run build --prefix client",
+    "test": "npm test --prefix server"
+  },
+  "devDependencies": {}
+}
