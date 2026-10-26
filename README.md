@@ -393,6 +393,65 @@ All **6 test suites and 20 tests** execute in isolation against an automated in-
 
 ---
 
+## Known Limitations & Trade-Offs
+
+- **Single-Tenant In-Process Execution:** For this demonstration prototype, task execution runs in an asynchronous in-process runtime with persistent MongoDB state. In a multi-tenant enterprise deployment with thousands of concurrent tasks, this execution loop would be offloaded to a distributed orchestration engine (e.g., Temporal or BullMQ) with isolated worker pools.
+- **Local File System Storage:** Uploaded and seeded PDF files are maintained in `server/uploads/` on the local file system. In cloud production, this layer cleanly abstracts to an S3 or Google Cloud Storage bucket.
+- **Text-Encoded PDFs vs. Scanned Bitmaps:** The document intelligence engine leverages `unpdf` (PDF.js) optimized for standard text-based enterprise PDFs. Integrating an OCR pipeline (e.g., Tesseract or Google Cloud Document AI) would be layered in for degraded, scanned paper receipts.
+- **Single Operator Persona:** Human-in-the-loop authorization currently models a single enterprise finance officer persona. A production deployment would integrate enterprise SSO (OAuth2 / SAML) with hierarchical role-based access control (RBAC).
+
+---
+
+## What We Would Build Next (Production Evolution Roadmap)
+
+1. **Distributed Agent Orchestration (Temporal / BullMQ):**
+   - Decouple agent workers from the HTTP server into isolated execution pods.
+   - Implement persistent workflow replays, distributed worker heartbeats, and zero-loss failover during cluster deployments.
+
+2. **Hyper-Personalized Company Knowledge & Long-Term Memory (RAG + pgvector):**
+   - Ingest organizational accounting rules, vendor payment agreements, and past human approval commentary into a vector store.
+   - Enable the AI employee to adapt to company-specific General Ledger account codes and approval nuances over time.
+
+3. **Multi-System Computer-Use & ERP Connectors:**
+   - Extend the modular tool registry with connectors for SAP, NetSuite, QuickBooks, and Salesforce.
+   - Incorporate containerized headless browser automation (Playwright) to navigate legacy corporate web portals that lack public REST APIs.
+
+4. **Continuous Agent Evaluation & Trajectory Benchmarking:**
+   - Establish an automated CI/CD evaluation harness tracking plan accuracy, step efficiency, token spend, and verification fidelity across hundreds of synthetic test cases.
+
+---
+
+## Assumptions Made During System Design
+
+- **Depth Over Breadth:** A focused, genuinely functional autonomous system that executes real database transactions and ground-truth verification is considerably more valuable than a superficial demo simulating dozens of workflows with mock data.
+- **Zero-Trust AI Output:** Large language models must never be permitted to write directly to enterprise ledgers without strict schema validation (Zod) and independent ground-truth verification comparing persisted data against the raw source.
+- **Security by Default:** High-value financial operations ($\ge \$10,000$) must always be subject to mandatory human-in-the-loop governance locks that cannot be bypassed by the AI.
+- **Zero-Friction Evaluation:** The system must run instantly on any recruiter or engineer's machine without requiring mandatory external API keys or cloud database accounts, achieved via automated in-memory MongoDB and deterministic fallback planning.
+
+---
+
+## Models, APIs, Frameworks & Pre-Built Components Used
+
+- **Foundation Models & AI SDK:**
+  - Google Gemini (`gemini-flash-latest`) via the official `@google/genai` SDK.
+  - Custom Deterministic Fallback Engine for offline testing, CI/CD, and zero-hang reliability.
+- **Backend Infrastructure:**
+  - **Runtime:** Node.js (v20+) with Express.js.
+  - **Database & ODM:** MongoDB Atlas with Mongoose schema modeling and composite indexing.
+  - **Zero-Config In-Memory DB:** `mongodb-memory-server` for instant local evaluation.
+  - **Document Intelligence:** `unpdf` (PDF.js text stream extractor).
+  - **Validation & Guards:** Zod (v3) for environment and tool argument validation.
+  - **File Handling:** Multer with magic header validation and memory buffering.
+- **Frontend Application:**
+  - **Framework & Build:** React 19, Vite (v6.0).
+  - **Styling:** Tailwind CSS (v3.4) with custom enterprise SaaS palette.
+  - **Icons:** Lucide React.
+  - **Error Resiliency:** Custom React `ErrorBoundary` with state recovery.
+- **Automated Testing Suite:**
+  - **Test Runner:** Vitest (v2.1) and Supertest for unit, integration, and workflow tests.
+
+---
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
