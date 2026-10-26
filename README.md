@@ -15,9 +15,13 @@
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Gara-Sriram/WorkPilot)
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-workpilot--hnvp.onrender.com-success?style=for-the-badge&logo=render&logoColor=white)](https://workpilot-hnvp.onrender.com)
+
 **From natural-language instructions to independently verified business outcomes.**
 
-[Live Deployment](#-one-click-cloud-deployment-render) • [Key Innovations](#key-engineering-innovations) • [System Architecture](#system-architecture) • [State Machine](#task-lifecycle-state-machine) • [Interactive Scenarios](#interactive-demonstration-scenarios) • [Quickstart](#getting-started)
+🌐 **Live Production App:** [https://workpilot-hnvp.onrender.com](https://workpilot-hnvp.onrender.com)
+
+[Live Demo](https://workpilot-hnvp.onrender.com) • [Key Innovations](#key-engineering-innovations) • [System Architecture](#system-architecture) • [State Machine](#task-lifecycle-state-machine) • [Interactive Scenarios](#interactive-demonstration-scenarios) • [Quickstart](#getting-started)
 
 </div>
 
