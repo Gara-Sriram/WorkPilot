@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: workpilot
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-flash-latest
+      - key: APPROVAL_THRESHOLD_AMOUNT
+        value: 10000
+      - key: MAX_TOOL_CALLS
+        value: 20
+      - key: MAX_RETRIES
+        value: 3
+      - key: TASK_TIMEOUT_MS
+        value: 120000

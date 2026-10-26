@@ -1,5 +1,8 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { env } from './config/env.js';
 import healthRoutes from './routes/healthRoutes.js';
 import taskRoutes from './routes/taskRoutes.js';
@@ -8,6 +11,10 @@ import financeRoutes from './routes/financeRoutes.js';
 import approvalRoutes from './routes/approvalRoutes.js';
 import demoRoutes from './routes/demoRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const clientDist = path.resolve(__dirname, '../../client/dist');
 
 const app = express();
 
@@ -28,6 +35,15 @@ app.use('/api', documentRoutes);
 app.use('/api', financeRoutes);
 app.use('/api', approvalRoutes);
 app.use('/api', demoRoutes);
+
+// Serve static frontend in production if built
+if (fs.existsSync(clientDist)) {
+  app.use(express.static(clientDist));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+}
 
 // 404 Fallback for unknown API endpoints
 app.use('/api/*', (req, res) => {
