@@ -220,18 +220,40 @@ toolRegistry.register({
       }
     }
 
-    // Save record in database
-    const record = await createFinanceRecord({
-      vendor: args.vendor,
-      invoiceNumber: args.invoiceNumber,
-      amount: args.amount,
-      currency: args.currency,
-      invoiceDate: args.invoiceDate,
-      dueDate: args.dueDate,
-      lineItems: args.lineItems,
-      documentId: args.documentId,
-      taskId: task ? task.taskId : null,
-    });
+    // Save record in database with duplicate prevention and idempotency guard
+    let record;
+    try {
+      record = await createFinanceRecord({
+        vendor: args.vendor,
+        invoiceNumber: args.invoiceNumber,
+        amount: args.amount,
+        currency: args.currency,
+        invoiceDate: args.invoiceDate,
+        dueDate: args.dueDate,
+        lineItems: args.lineItems,
+        documentId: args.documentId,
+        taskId: task ? task.taskId : null,
+      });
+    } catch (err) {
+      if (err.name === 'DuplicateFinanceRecordError' || err.code === 11000) {
+        const existing = await getFinanceRecordByBusinessKey(args.vendor, args.invoiceNumber);
+        if (existing) {
+          return {
+            recordId: existing.recordId,
+            vendor: existing.vendor,
+            invoiceNumber: existing.invoiceNumber,
+            amount: existing.amount,
+            currency: existing.currency,
+            status: existing.status,
+            uniqueCompositeKey: existing.uniqueCompositeKey,
+            createdAt: existing.createdAt,
+            isExistingRecord: true,
+            message: `Idempotency guard active: Verified finance record (${existing.recordId}) already exists for ${existing.vendor} (${existing.invoiceNumber}). Retained without duplicate insertion.`,
+          };
+        }
+      }
+      throw err;
+    }
 
     return {
       recordId: record.recordId,

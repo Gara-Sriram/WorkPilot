@@ -308,9 +308,23 @@ function deterministicInvoiceExtractor(text, filename) {
 
   // Invoice Number
   let invoiceNumber = '';
-  const invMatch = text.match(/(?:invoice|inv)[\s#:]+([A-Za-z0-9-_]+)/i);
-  if (invMatch) invoiceNumber = invMatch[1].trim();
-  else missingFields.push('invoiceNumber');
+  // Check for standard enterprise code format: letters-dash-numbers (e.g. GLX-9942, INV-2024-001, INT-7701)
+  const codeMatch = text.match(/\b([A-Za-z]{2,5}-\d{3,6}(?:-[A-Za-z0-9]+)?)\b/);
+  if (codeMatch) {
+    invoiceNumber = codeMatch[1].trim();
+  } else {
+    // Match "Invoice #:" or "Invoice Number:" followed by identifier, excluding words like Invoice/Number/Date
+    const invMatch = text.match(/(?:invoice|inv)[\s#.:]+(?:number|no\.?|#)?[\s:]*(?!invoice\b|number\b|date\b|due\b)([A-Za-z0-9-_]+)/i);
+    if (invMatch) invoiceNumber = invMatch[1].trim();
+  }
+
+  // Fallback to filename if not found in text
+  if (!invoiceNumber && filename) {
+    const fileCode = filename.match(/\b([A-Za-z]{2,5}-\d{3,6}(?:-[A-Za-z0-9]+)?)\b/);
+    if (fileCode) invoiceNumber = fileCode[1].trim();
+  }
+
+  if (!invoiceNumber) missingFields.push('invoiceNumber');
 
   // Amount
   let amount = 0;

@@ -78,6 +78,11 @@ function extractVendorHeuristic(text) {
 }
 
 function extractInvoiceNumberHeuristic(text) {
-  const match = text.match(/(?:invoice|inv)[\s#:]+([A-Za-z0-9-_]+)/i);
+  // 1. Look for standard enterprise code format first: letters-dash-numbers (e.g. GLX-9942, INV-2024-001, INT-7701)
+  const codeMatch = text.match(/\b([A-Za-z]{2,5}-\d{3,6}(?:-[A-Za-z0-9]+)?)\b/);
+  if (codeMatch) return codeMatch[1].trim();
+
+  // 2. Look for "Invoice #:" or "Invoice Number:" followed by actual identifier, avoiding "Invoice" or "Number" header words
+  const match = text.match(/(?:invoice|inv)[\s#.:]+(?:number|no\.?|#)?[\s:]*(?!invoice\b|number\b|date\b|due\b)([A-Za-z0-9-_]+)/i);
   return match ? match[1].trim() : '';
 }
