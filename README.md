@@ -13,9 +13,11 @@
 [![Tests](https://img.shields.io/badge/Tests-20%20Passed%20%7C%20Vitest-brightgreen?style=flat-square&logo=vitest&logoColor=white)](https://vitest.dev/)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Gara-Sriram/WorkPilot)
+
 **From natural-language instructions to independently verified business outcomes.**
 
-[Key Innovations](#key-engineering-innovations) • [System Architecture](#system-architecture) • [State Machine](#task-lifecycle-state-machine) • [Interactive Scenarios](#interactive-demonstration-scenarios) • [Quickstart](#getting-started) • [Security](#security--governance)
+[Live Deployment](#-one-click-cloud-deployment-render) • [Key Innovations](#key-engineering-innovations) • [System Architecture](#system-architecture) • [State Machine](#task-lifecycle-state-machine) • [Interactive Scenarios](#interactive-demonstration-scenarios) • [Quickstart](#getting-started)
 
 </div>
 
@@ -294,7 +296,31 @@ WorkPilot/
 
 ---
 
-## Getting Started
+## 🚀 One-Click Cloud Deployment (Render)
+
+WorkPilot is configured with a unified deployment architecture. When built, the Express backend automatically serves the compiled React application, allowing the entire system to run seamlessly on a single cloud service.
+
+### Option A: 1-Click Blueprint Deploy
+1. Click the button below:  
+   [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Gara-Sriram/WorkPilot)
+2. Connect your GitHub account and authorize the repository (`Gara-Sriram/WorkPilot`).
+3. Fill in the two environment variables:
+   - `MONGODB_URI`: Your MongoDB Atlas connection string (or leave empty to let WorkPilot launch an automated DB).
+   - `GEMINI_API_KEY`: *(Optional)* Your Google Gemini API key from [Google AI Studio](https://aistudio.google.com/).
+4. Click **Apply**. Render will automatically run the build, package the frontend, and give you a live HTTPS URL (e.g. `https://workpilot.onrender.com`).
+
+### Option B: Manual Render Web Service Setup
+- **Environment**: Node
+- **Build Command**: `npm run build`
+- **Start Command**: `npm start`
+- **Environment Variables**:
+  - `NODE_ENV`: `production`
+  - `MONGODB_URI`: `your_mongodb_atlas_uri`
+  - `GEMINI_API_KEY`: `your_gemini_key` *(optional)*
+
+---
+
+## Getting Started (Local Development)
 
 ### Prerequisites
 - **Node.js**: v18.0.0 or later (tested on v20.x and v24.x)
