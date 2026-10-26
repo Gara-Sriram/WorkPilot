@@ -7,6 +7,6 @@ export default defineConfig({
     setupFiles: ['./tests/setup.js'],
     testTimeout: 60000,
     hookTimeout: 60000,
-    threads: false, // run serially to avoid in-memory database collisions
+    fileParallelism: false, // run test files serially to prevent database race conditions
   },
 });

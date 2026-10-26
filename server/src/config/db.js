@@ -4,13 +4,15 @@ import { env } from './env.js';
 let mongodInstance = null;
 let activeUri = '';
 
-export async function connectDB() {
+export async function connectDB(forceMemory = false) {
   if (mongoose.connection.readyState === 1) {
     return mongoose.connection;
   }
 
-  // 1. Try configured MONGODB_URI if provided
-  if (env.MONGODB_URI && env.MONGODB_URI.trim()) {
+  const isTest = process.env.NODE_ENV === 'test';
+
+  // 1. Try configured MONGODB_URI if provided and not in test mode
+  if (!isTest && !forceMemory && env.MONGODB_URI && env.MONGODB_URI.trim()) {
     try {
       console.log(`[Database] Attempting connection to MongoDB at: ${env.MONGODB_URI.replace(/\/\/[^:]+:[^@]+@/, '//***:***@')}`);
       await mongoose.connect(env.MONGODB_URI, {
