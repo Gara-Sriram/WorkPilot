@@ -110,6 +110,18 @@ export async function retryTask(taskId) {
   task.status = 'PENDING';
   task.errorDetails = null;
   task.toolCallCount = 0;
+
+  // Reset any failed steps so they can be cleanly executed
+  if (task.plan && Array.isArray(task.plan)) {
+    for (const step of task.plan) {
+      if (step.status === 'FAILED') {
+        step.status = 'PENDING';
+        step.attempts = 0;
+        step.error = null;
+      }
+    }
+  }
+
   task.executionHistory.push({
     timestamp: new Date(),
     eventType: 'RETRY_SCHEDULED',

@@ -80,14 +80,31 @@ toolRegistry.register({
 toolRegistry.register({
   name: 'validate_invoice',
   description: 'Check extracted invoice fields for completeness, valid data types, positive monetary amounts, and valid date formats.',
-  schema: z.object({
+  schema: z.preprocess((raw) => {
+    if (!raw || typeof raw !== 'object') return raw;
+    const source = raw.validatedData || raw.invoiceData || raw.invoice || raw;
+    return {
+      vendor: source.vendor,
+      invoiceNumber: source.invoiceNumber,
+      amount: source.amount,
+      currency: source.currency || 'USD',
+      invoiceDate: source.invoiceDate,
+      dueDate: source.dueDate,
+    };
+  }, z.object({
     vendor: z.string().min(1, 'Vendor name is required'),
     invoiceNumber: z.string().min(1, 'Invoice number is required'),
-    amount: z.number().positive('Amount must be a positive number'),
+    amount: z.preprocess((val) => {
+      if (typeof val === 'string') {
+        const cleaned = val.replace(/[^0-9.-]+/g, '');
+        return cleaned ? parseFloat(cleaned) : val;
+      }
+      return typeof val === 'number' ? val : Number(val);
+    }, z.number().positive('Amount must be a positive number')),
     currency: z.string().min(1).default('USD'),
     invoiceDate: z.string().optional().nullable(),
     dueDate: z.string().optional().nullable(),
-  }),
+  })),
   execute: async (args) => {
     const issues = [];
     const normalizedVendor = args.vendor.trim();
@@ -145,16 +162,35 @@ toolRegistry.register({
 toolRegistry.register({
   name: 'create_finance_record',
   description: 'Create a permanent finance record in MongoDB with duplicate-key protection. Requires human approval if amount exceeds policy threshold.',
-  schema: z.object({
-    vendor: z.string().min(1),
-    invoiceNumber: z.string().min(1),
-    amount: z.number().positive(),
+  schema: z.preprocess((raw) => {
+    if (!raw || typeof raw !== 'object') return raw;
+    const source = raw.validatedData || raw.invoiceData || raw.invoice || raw;
+    return {
+      vendor: source.vendor,
+      invoiceNumber: source.invoiceNumber,
+      amount: source.amount,
+      currency: source.currency || 'USD',
+      invoiceDate: source.invoiceDate,
+      dueDate: source.dueDate,
+      lineItems: source.lineItems || [],
+      documentId: source.documentId,
+    };
+  }, z.object({
+    vendor: z.string().min(1, 'Vendor is required'),
+    invoiceNumber: z.string().min(1, 'Invoice number is required'),
+    amount: z.preprocess((val) => {
+      if (typeof val === 'string') {
+        const cleaned = val.replace(/[^0-9.-]+/g, '');
+        return cleaned ? parseFloat(cleaned) : val;
+      }
+      return typeof val === 'number' ? val : Number(val);
+    }, z.number().positive('Amount must be positive')),
     currency: z.string().default('USD'),
     invoiceDate: z.string().optional().nullable(),
     dueDate: z.string().optional().nullable(),
     lineItems: z.array(z.any()).optional().default([]),
     documentId: z.string().optional().nullable(),
-  }),
+  })),
   execute: async (args, context = {}) => {
     const threshold = env.APPROVAL_THRESHOLD_AMOUNT;
     const task = context.task;

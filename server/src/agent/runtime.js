@@ -72,6 +72,15 @@ export class AgentRuntime {
       verificationReport: null,
     };
 
+    // Hydrate context from any previously completed steps in the plan (e.g., when resuming after approval)
+    if (task.plan && Array.isArray(task.plan)) {
+      for (const step of task.plan) {
+        if (step.status === 'SUCCEEDED' && step.result) {
+          this.updateContextAfterSuccess(step.tool, step.result, executionContext);
+        }
+      }
+    }
+
     const startTime = Date.now();
 
     while (task.currentStepIndex < task.plan.length) {
@@ -109,6 +118,7 @@ export class AgentRuntime {
 
       // 3. Dynamically resolve step arguments from previous step results
       const resolvedArgs = this.resolveStepArguments(currentStep, executionContext);
+      currentStep.args = resolvedArgs;
 
       // Record Tool Requested
       task.executionHistory.push({
@@ -152,6 +162,7 @@ export class AgentRuntime {
         // Check if the tool intercepted and requested human approval
         if (execResult.data && execResult.data.requiresApproval) {
           currentStep.status = 'PENDING'; // Kept pending until operator decides
+          currentStep.attempts = Math.max(0, currentStep.attempts - 1); // Do not consume transient retry budget for human pause
           task.status = 'WAITING_FOR_APPROVAL';
           await task.save();
           return task; // Pause execution until approval
@@ -281,52 +292,77 @@ export class AgentRuntime {
   resolveStepArguments(step, ctx) {
     const args = { ...step.args };
 
+    // Find extracted data from context, or fall back to inspecting prior steps in plan
+    let extracted = { ...(ctx.extractedData || {}) };
+    if (!extracted.vendor || extracted.amount === undefined) {
+      if (ctx.task?.plan && Array.isArray(ctx.task.plan)) {
+        for (const s of ctx.task.plan) {
+          if (s.result) {
+            if (s.tool === 'extract_invoice') {
+              extracted = { ...(s.result.invoice || s.result), ...extracted };
+            } else if (s.tool === 'validate_invoice' && s.result.validatedData) {
+              extracted = { ...s.result.validatedData, ...extracted };
+            }
+          }
+        }
+      }
+    }
+
+    // Find created finance record from context or from plan
+    let financeRecord = ctx.createdFinanceRecord;
+    if (!financeRecord && ctx.task?.plan && Array.isArray(ctx.task.plan)) {
+      const finStep = ctx.task.plan.find(s => s.tool === 'create_finance_record' && s.result?.recordId);
+      if (finStep) {
+        financeRecord = finStep.result;
+      }
+    }
+
     if (step.tool === 'extract_invoice') {
       if (!args.documentId) {
         // Get documentId from task relevantDocumentIds or from step_1 search results
         if (ctx.task.relevantDocumentIds && ctx.task.relevantDocumentIds.length > 0) {
           args.documentId = ctx.task.relevantDocumentIds[0];
         } else {
-          const searchStep = ctx.task.plan.find(s => s.tool === 'search_documents' && s.result?.matches?.length > 0);
+          const searchStep = ctx.task.plan?.find(s => s.tool === 'search_documents' && s.result?.matches?.length > 0);
           if (searchStep && searchStep.result.matches[0]) {
             args.documentId = searchStep.result.matches[0].documentId;
           }
         }
       }
     } else if (step.tool === 'validate_invoice') {
-      if (ctx.extractedData) {
-        args.vendor = args.vendor || ctx.extractedData.vendor;
-        args.invoiceNumber = args.invoiceNumber || ctx.extractedData.invoiceNumber;
-        args.amount = args.amount !== undefined ? args.amount : ctx.extractedData.amount;
-        args.currency = args.currency || ctx.extractedData.currency || 'USD';
-        args.dueDate = args.dueDate || ctx.extractedData.dueDate;
-        args.invoiceDate = args.invoiceDate || ctx.extractedData.invoiceDate;
+      if (extracted && extracted.vendor) {
+        args.vendor = args.vendor || extracted.vendor;
+        args.invoiceNumber = args.invoiceNumber || extracted.invoiceNumber;
+        args.amount = (typeof args.amount === 'number' && !isNaN(args.amount)) ? args.amount : (extracted.amount !== undefined ? Number(extracted.amount) : undefined);
+        args.currency = args.currency || extracted.currency || 'USD';
+        args.dueDate = args.dueDate || extracted.dueDate;
+        args.invoiceDate = args.invoiceDate || extracted.invoiceDate;
       }
     } else if (step.tool === 'create_finance_record') {
-      if (ctx.extractedData) {
-        args.vendor = args.vendor || ctx.extractedData.vendor;
-        args.invoiceNumber = args.invoiceNumber || ctx.extractedData.invoiceNumber;
-        args.amount = args.amount !== undefined ? args.amount : ctx.extractedData.amount;
-        args.currency = args.currency || ctx.extractedData.currency || 'USD';
-        args.dueDate = args.dueDate || ctx.extractedData.dueDate;
-        args.invoiceDate = args.invoiceDate || ctx.extractedData.invoiceDate;
-        args.lineItems = args.lineItems || ctx.extractedData.lineItems || [];
-        args.documentId = args.documentId || ctx.extractedData.documentId;
+      if (extracted && extracted.vendor) {
+        args.vendor = args.vendor || extracted.vendor;
+        args.invoiceNumber = args.invoiceNumber || extracted.invoiceNumber;
+        args.amount = (typeof args.amount === 'number' && !isNaN(args.amount)) ? args.amount : (extracted.amount !== undefined ? Number(extracted.amount) : undefined);
+        args.currency = args.currency || extracted.currency || 'USD';
+        args.dueDate = args.dueDate || extracted.dueDate;
+        args.invoiceDate = args.invoiceDate || extracted.invoiceDate;
+        args.lineItems = args.lineItems || extracted.lineItems || [];
+        args.documentId = args.documentId || extracted.documentId;
       }
     } else if (step.tool === 'verify_finance_record') {
-      if (ctx.createdFinanceRecord) {
-        args.recordId = args.recordId || ctx.createdFinanceRecord.recordId;
+      if (financeRecord) {
+        args.recordId = args.recordId || financeRecord.recordId;
       }
-      if (ctx.extractedData) {
-        args.vendor = args.vendor || ctx.extractedData.vendor;
-        args.invoiceNumber = args.invoiceNumber || ctx.extractedData.invoiceNumber;
+      if (extracted && extracted.vendor) {
+        args.vendor = args.vendor || extracted.vendor;
+        args.invoiceNumber = args.invoiceNumber || extracted.invoiceNumber;
         args.expectedSourceData = args.expectedSourceData || {
-          vendor: ctx.extractedData.vendor,
-          invoiceNumber: ctx.extractedData.invoiceNumber,
-          amount: ctx.extractedData.amount,
-          currency: ctx.extractedData.currency,
-          dueDate: ctx.extractedData.dueDate,
-          invoiceDate: ctx.extractedData.invoiceDate,
+          vendor: extracted.vendor,
+          invoiceNumber: extracted.invoiceNumber,
+          amount: (typeof extracted.amount === 'number' && !isNaN(extracted.amount)) ? extracted.amount : Number(extracted.amount),
+          currency: extracted.currency || 'USD',
+          dueDate: extracted.dueDate,
+          invoiceDate: extracted.invoiceDate,
         };
       }
     }
@@ -335,15 +371,28 @@ export class AgentRuntime {
   }
 
   updateContextAfterSuccess(toolName, data, ctx) {
+    if (!data) return;
     if (toolName === 'search_documents') {
       if (data.matches && data.matches.length > 0) {
-        const docId = data.matches[0].documentId;
-        if (!ctx.task.relevantDocumentIds.includes(docId)) {
-          ctx.task.relevantDocumentIds.push(docId);
+        for (const match of data.matches) {
+          if (match.documentId && !ctx.task.relevantDocumentIds.includes(match.documentId)) {
+            ctx.task.relevantDocumentIds.push(match.documentId);
+          }
         }
       }
     } else if (toolName === 'extract_invoice') {
-      ctx.extractedData = data;
+      const extracted = data.invoice || data;
+      ctx.extractedData = {
+        ...(ctx.extractedData || {}),
+        ...extracted,
+      };
+    } else if (toolName === 'validate_invoice') {
+      if (data.validatedData) {
+        ctx.extractedData = {
+          ...(ctx.extractedData || {}),
+          ...data.validatedData,
+        };
+      }
     } else if (toolName === 'create_finance_record') {
       ctx.createdFinanceRecord = data;
     } else if (toolName === 'verify_finance_record') {
@@ -379,16 +428,29 @@ export class AgentRuntime {
     }
 
     // If verify_finance_record was not executed in plan, execute it now to guarantee independent verification
-    if (ctx.createdFinanceRecord && ctx.extractedData) {
+    const finRecord = ctx.createdFinanceRecord || task.plan?.find(s => s.tool === 'create_finance_record' && s.result?.recordId)?.result;
+    let extracted = ctx.extractedData;
+    if ((!extracted || !extracted.vendor) && task.plan) {
+      const extStep = task.plan.find(s => s.tool === 'extract_invoice' && s.result);
+      if (extStep && extStep.result) {
+        extracted = { ...(extStep.result.invoice || extStep.result), ...(extracted || {}) };
+      }
+      const valStep = task.plan.find(s => s.tool === 'validate_invoice' && s.result?.validatedData);
+      if (valStep && valStep.result?.validatedData) {
+        extracted = { ...extracted, ...valStep.result.validatedData };
+      }
+    }
+
+    if (finRecord && extracted && extracted.vendor) {
       const report = await toolRegistry.execute('verify_finance_record', {
-        recordId: ctx.createdFinanceRecord.recordId,
+        recordId: finRecord.recordId,
         expectedSourceData: {
-          vendor: ctx.extractedData.vendor,
-          invoiceNumber: ctx.extractedData.invoiceNumber,
-          amount: ctx.extractedData.amount,
-          currency: ctx.extractedData.currency,
-          dueDate: ctx.extractedData.dueDate,
-          invoiceDate: ctx.extractedData.invoiceDate,
+          vendor: extracted.vendor,
+          invoiceNumber: extracted.invoiceNumber,
+          amount: (typeof extracted.amount === 'number' && !isNaN(extracted.amount)) ? extracted.amount : Number(extracted.amount),
+          currency: extracted.currency || 'USD',
+          dueDate: extracted.dueDate,
+          invoiceDate: extracted.invoiceDate,
         },
       }, { task });
 
